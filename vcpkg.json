@@ -1,0 +1,20 @@
+{
+    "name": "minimal-skills",
+    "version-string": "1.0.0",
+    "description": "",
+    "homepage": "",
+    "license": "MIT",
+    "dependencies": [
+        "boost-stl-interfaces",
+        "rsm-binary-io",
+        "spdlog",
+        "tomlplusplus",
+        {
+            "name": "imgui",
+            "features": [
+                "dx11-binding",
+                "win32-binding"
+            ]
+        }
+    ]
+}
