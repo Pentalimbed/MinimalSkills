@@ -21,7 +21,7 @@ struct SkillConfig
     bool     loaded = false;
     fs::path path;
 
-    std::string name;
+    std::string name = "Failed";
     std::string desc;
     // global vars
     RE::TESGlobal* g_skill_lvl;

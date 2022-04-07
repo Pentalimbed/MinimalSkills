@@ -9,15 +9,16 @@ struct UpdateHook
     {
         func(a_this, a2);
         for (const auto& skill_config : ConfigReader::getSingleton()->configs)
-        {
-            auto val = std::lround(skill_config.g_show_lvl_up->value);
-            if (val > 0)
+            if (skill_config.loaded)
             {
-                RE::DebugNotification(fmt::format("Skill \"{}\" has reached lvl. {}", skill_config.name, val).c_str());
-                RE::PlaySound("UISkillIncreaseSD");
-                skill_config.g_show_lvl_up->value = 0;
+                auto val = std::lround(skill_config.g_show_lvl_up->value);
+                if (val > 0)
+                {
+                    RE::DebugNotification(fmt::format("Skill \"{}\" has reached lvl. {}", skill_config.name, val).c_str());
+                    RE::PlaySound("UISkillIncreaseSD");
+                    skill_config.g_show_lvl_up->value = 0;
+                }
             }
-        }
     }
     static inline REL::Relocation<decltype(thunk)> func;
 

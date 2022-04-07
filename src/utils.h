@@ -28,10 +28,13 @@ T* getForm(const std::string& plugin_name, RE::FormID form_id)
     return result->As<T>();
 }
 
-void parseStrList(std::vector<uint16_t>& vec, const std::string& str)
+void parseStrList(std::vector<uint16_t>& vec, std::string str)
 {
-    std::stringstream strstrm(str);
-    uint16_t          tmp;
+    for (auto& chr : str)
+        if (chr == ',')
+            chr = ' ';
+    std::istringstream strstrm(str);
+    uint16_t           tmp;
     while (strstrm >> tmp)
         vec.push_back(tmp);
 }

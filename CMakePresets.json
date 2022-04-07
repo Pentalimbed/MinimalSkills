@@ -72,5 +72,22 @@
             "name": "ae"
         }
     ],
+    "buildPresets": [
+        {
+            "configurePreset": "se",
+            "configuration": "Release",
+            "name": "se-release"
+        },
+        {
+            "configurePreset": "ae",
+            "configuration": "Release",
+            "name": "ae-release"
+        },
+        {
+            "configurePreset": "ae",
+            "configuration": "Debug",
+            "name": "ae-debug"
+        }
+    ],
     "version": 2
 }

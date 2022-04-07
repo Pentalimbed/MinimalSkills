@@ -6,8 +6,6 @@ namespace minskill
 {
 void draw()
 {
-    ImGui::Separator();
-
     auto player = RE::PlayerCharacter::GetSingleton();
     if (!player || !player->Is3DLoaded())
     {

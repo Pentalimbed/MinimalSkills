@@ -48,7 +48,9 @@ void SkillConfig::read(const fs::path& path)
     }
     catch (toml::parse_error err)
     {
-        logger::error("Failed to parse file {}.\nError: {}", path.string(), err.description());
+        std::ostringstream strstrm;
+        strstrm << err;
+        logger::error("Failed to parse file {}.\n\tError: {}", path.string(), strstrm.str());
         return;
     }
 
@@ -56,11 +58,23 @@ void SkillConfig::read(const fs::path& path)
     desc = tbl["Description"].as_string()->get();
 
     g_skill_lvl = getForm<RE::TESGlobal>(tbl["LevelFile"].value_or<std::string>(""), (RE::FormID)tbl["LevelId"].value_or<int64_t>(0));
-    if (!g_skill_lvl) return;
+    if (!g_skill_lvl)
+    {
+        logger::error("Cannot find value of LevelFile or LevelId");
+        return;
+    }
     g_lvl_ratio = getForm<RE::TESGlobal>(tbl["RatioFile"].value_or<std::string>(""), (RE::FormID)tbl["RatioId"].value_or<int64_t>(0));
-    if (!g_lvl_ratio) return;
+    if (!g_lvl_ratio)
+    {
+        logger::error("Cannot find value of RatioFile or RatioId");
+        return;
+    }
     g_show_lvl_up = getForm<RE::TESGlobal>(tbl["ShowLevelupFile"].value_or<std::string>(""), (RE::FormID)tbl["ShowLevelupId"].value_or<int64_t>(0));
-    if (!g_show_lvl_up) return;
+    if (!g_show_lvl_up)
+    {
+        logger::error("Cannot find value of ShowLevelupFile or ShowLevelupId");
+        return;
+    }
     g_perk_pts   = getForm<RE::TESGlobal>(tbl["PerkPointsFile"].value_or<std::string>(""), (RE::FormID)tbl["PerkPointsId"].value_or<int64_t>(0));
     g_legend_cts = getForm<RE::TESGlobal>(tbl["LegendaryFile"].value_or<std::string>(""), (RE::FormID)tbl["LegendaryId"].value_or<int64_t>(0));
 
@@ -68,7 +82,6 @@ void SkillConfig::read(const fs::path& path)
     std::map<uint16_t, TempPerk> temp_perks;
     for (const auto& [key, val] : tbl)
     {
-        logger::debug("Key {}.", key.str());
         std::string key_str(key.str());
         std::smatch m;
         std::regex  node_regex("^Node([0-9]+)");
@@ -85,8 +98,8 @@ void SkillConfig::read(const fs::path& path)
 
             temp.plugin = node_tbl["PerkFile"].value_or<std::string>("");
             temp.id     = node_tbl["PerkId"].value_or<int64_t>(0);
-            temp.x      = node_tbl["X"].value_or<double>(false);
-            temp.y      = node_tbl["Y"].value_or<double>(false);
+            temp.x      = node_tbl["X"].value_or<double>(0);
+            temp.y      = node_tbl["Y"].value_or<double>(0);
             temp.gridx  = node_tbl["GridX"].value_or<int64_t>(0);
             temp.gridy  = node_tbl["GridY"].value_or<int64_t>(0);
             parseStrList(temp.links, node_tbl["Links"].value_or<std::string>(""));
@@ -94,7 +107,6 @@ void SkillConfig::read(const fs::path& path)
             temp_perks[num] = temp;
         }
     }
-    logger::debug("{} has {} perks", name, temp_perks.size());
 
     // Find perk form & skill req
     std::list<uint16_t> disabled_nodes;
@@ -143,7 +155,6 @@ void SkillConfig::read(const fs::path& path)
             }
         }
     }
-    logger::debug("{} has {} perks enabled", name, perks.size());
 
     loaded = true;
 }
@@ -152,7 +163,7 @@ void SkillConfig::draw()
 {
     if (!loaded)
     {
-        ImGui::Text("Failed to load config for this skill. Please check log.");
+        ImGui::Text("Failed to load config {}.\n\tPlease check log at [My Games/Skyrim Special Edition/SKSE/MinimalisticSkillMenu.log].", path.c_str());
         return;
     }
 
@@ -174,7 +185,7 @@ void SkillConfig::draw()
     ImGui::Text(fmt::format("Perk Points: {}", g_perk_pts ? (int8_t)g_perk_pts->value : RE::PlayerCharacter::GetSingleton()->perkCount).c_str());
 
     // Skill tree
-    if (ImGui::Begin(fmt::format("Perk Tree ({})", name).c_str()))
+    if (ImGui::Begin(fmt::format("Perk Tree ({})", name).c_str(), nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
     {
         ImNodes::Ez::BeginCanvas();
 
@@ -242,13 +253,12 @@ void SkillConfig::setLegendary()
     g_skill_lvl->value = 0;
 
     for (auto& [num, perk_info] : perks)
-        for (auto newest_perk = perk_info.perk; newest_perk; newest_perk = newest_perk->nextPerk)
+        for (auto newest_perk = perk_info.perk; newest_perk && player->HasPerk(newest_perk); newest_perk = newest_perk->nextPerk)
         {
             if (g_perk_pts)
                 g_perk_pts->value += 1;
             else
                 player->perkCount++;
-
             player->RemovePerk(newest_perk);
         }
 
@@ -274,12 +284,9 @@ void SkillConfig::drawPerkInfo(Perk& perk_info)
             (conditem->data.flags.opCode == RE::CONDITION_ITEM_DATA::OpCode::kGreaterThanOrEqualTo))
         {
             auto param = std::bit_cast<ConditionParam>(conditem->data.functionData.params[0]).form;
-            if (param->GetFormID() == g_skill_lvl->GetFormID())
-            {
-                logger::debug("{}", conditem->data.comparisonValue.f);
+            if ((uintptr_t)param == (uintptr_t)g_skill_lvl)
                 skill_req = std::lround(conditem->data.comparisonValue.f);
-            }
-            if (param->GetFormID() == g_legend_cts->GetFormID())
+            if ((uintptr_t)param == (uintptr_t)g_legend_cts)
                 legend_req = std::lround(conditem->data.comparisonValue.f);
         }
     }
@@ -287,7 +294,7 @@ void SkillConfig::drawPerkInfo(Perk& perk_info)
     ImGui::SameLine();
     ImGui::Text("Legendary Needed: %ld", legend_req);
 
-    RE::BSString perk_desc;
+    RE::BSString perk_desc = "";
     newest_perk->GetDescription(perk_desc, newest_perk);
     ImGui::Text("Description: %s", perk_desc.c_str());
 
@@ -372,7 +379,7 @@ void ConfigReader::draw()
 
     if (configs.size() > 0)
     {
-        if (ImGui::BeginTabBar("MyTabBar", ImGuiTabBarFlags_None))
+        if (ImGui::BeginTabBar("Skills", ImGuiTabBarFlags_None))
         {
             for (auto& config : configs)
             {
