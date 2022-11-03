@@ -465,6 +465,7 @@ static ImVec4& GetStyleColorRef(ImNodesStyleCol idx)
         case ImNodesStyleCol_NodeTitleBarBgActive: return g.Style.Colors.NodeTitleBarBgActive;
         default: IM_ASSERT(0);
     }
+    return g.Style.Colors.NodeBodyBg;
 }
 
 static ImU32 GetStyleColorU32(ImNodesStyleCol idx)

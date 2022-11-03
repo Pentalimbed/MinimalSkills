@@ -29,5 +29,3 @@ void write_thunk_call()
     T::func = trampoline.write_call<5>(hook.address() + T::offset, T::thunk);
 }
 } // namespace stl
-
-#include "Version.h"

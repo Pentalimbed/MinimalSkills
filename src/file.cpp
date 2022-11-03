@@ -10,7 +10,7 @@
 namespace minskill
 {
 const fs::path config_dir    = "data/NetScriptFramework/Plugins";
-const auto     config_prefix = "CustomSkill."sv;
+const auto     config_prefix = "customskill."sv;
 const auto     config_suffix = ".config.txt"sv;
 
 const ImVec2 scale         = {70, 400};
@@ -161,6 +161,7 @@ void SkillConfig::read(const fs::path& path)
 
 void SkillConfig::draw()
 {
+
     if (!loaded)
     {
         ImGui::Text("Failed to load config {}.\n\tPlease check log at [My Games/Skyrim Special Edition/SKSE/MinimalisticSkillMenu.log].", path.c_str());
@@ -182,12 +183,17 @@ void SkillConfig::draw()
         ImGui::SameLine();
         ImGui::Text(fmt::format("Legnedary Count: {}", legend_cts).c_str());
     }
-    ImGui::Text(fmt::format("Perk Points: {}", g_perk_pts ? (int8_t)g_perk_pts->value : RE::PlayerCharacter::GetSingleton()->perkCount).c_str());
+    ImGui::Text(fmt::format("Perk Points: {}", g_perk_pts ? (int8_t)g_perk_pts->value : RE::PlayerCharacter::GetSingleton()->GetGameStatsData().perkCount).c_str());
 
     // Skill tree
     if (ImGui::Begin(fmt::format("Perk Tree ({})", name).c_str(), nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
     {
+        static float zoom = 1.0f;
+        ImGui::SliderFloat("Zoom", &zoom, 0.2f, 2.f, "%.1fx");
+
         ImNodes::Ez::BeginCanvas();
+
+        ImNodes::GetCurrentCanvas()->Zoom = zoom;
 
         for (auto& [num, perk_info] : perks)
         {
@@ -258,7 +264,7 @@ void SkillConfig::setLegendary()
             if (g_perk_pts)
                 g_perk_pts->value += 1;
             else
-                player->perkCount++;
+                player->GetGameStatsData().perkCount++;
             player->RemovePerk(newest_perk);
         }
 
@@ -273,30 +279,65 @@ void SkillConfig::drawPerkInfo(Perk& perk_info)
     while (player->HasPerk(newest_perk) && newest_perk->nextPerk)
         newest_perk = newest_perk->nextPerk;
 
-    ImGui::Text("Perk: %s", newest_perk->GetName());
-
-    long skill_req  = 0;
-    long legend_req = 0;
-
-    for (auto conditem = newest_perk->perkConditions.head; conditem; conditem = conditem->next)
+    if (ImGui::BeginTable("Req", 2))
     {
-        if ((conditem->data.functionData.function == RE::FUNCTION_DATA::FunctionID::kGetGlobalValue) &&
-            (conditem->data.flags.opCode == RE::CONDITION_ITEM_DATA::OpCode::kGreaterThanOrEqualTo))
-        {
-            auto param = std::bit_cast<ConditionParam>(conditem->data.functionData.params[0]).form;
-            if ((uintptr_t)param == (uintptr_t)g_skill_lvl)
-                skill_req = std::lround(conditem->data.comparisonValue.f);
-            if ((uintptr_t)param == (uintptr_t)g_legend_cts)
-                legend_req = std::lround(conditem->data.comparisonValue.f);
-        }
-    }
-    ImGui::Text("Skill Needed: %ld", skill_req);
-    ImGui::SameLine();
-    ImGui::Text("Legendary Needed: %ld", legend_req);
+        ImGui::TableSetupColumn("1", 0, 1);
+        ImGui::TableSetupColumn("2", 0, 2);
 
-    RE::BSString perk_desc = "";
-    newest_perk->GetDescription(perk_desc, newest_perk);
-    ImGui::Text("Description: %s", perk_desc.c_str());
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Perk:");
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%s", newest_perk->GetName());
+
+        long skill_req  = 0;
+        long legend_req = 0;
+
+        for (auto conditem = newest_perk->perkConditions.head; conditem; conditem = conditem->next)
+        {
+            if ((conditem->data.functionData.function == RE::FUNCTION_DATA::FunctionID::kGetGlobalValue) &&
+                ((conditem->data.flags.opCode == RE::CONDITION_ITEM_DATA::OpCode::kGreaterThanOrEqualTo) ||
+                 (conditem->data.flags.opCode == RE::CONDITION_ITEM_DATA::OpCode::kEqualTo)))
+            {
+                auto param = std::bit_cast<ConditionParam>(conditem->data.functionData.params[0]).form;
+                if ((uintptr_t)param == (uintptr_t)g_skill_lvl)
+                    skill_req = std::lround(conditem->data.comparisonValue.f);
+                if ((uintptr_t)param == (uintptr_t)g_legend_cts)
+                    legend_req = std::lround(conditem->data.comparisonValue.f);
+            }
+        }
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Skill Needed:");
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%ld", skill_req);
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Legendary Needed:");
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%ld", legend_req);
+
+        RE::BSString perk_desc = "";
+        newest_perk->GetDescription(perk_desc, newest_perk);
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Description:");
+
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextWrapped("%s", perk_desc.c_str());
+
+        ImGui::EndTable();
+    }
 
     static bool             get_perk_failed = false;
     static std::string_view failed_reason   = "";
@@ -326,10 +367,10 @@ void SkillConfig::drawPerkInfo(Perk& perk_info)
             }
             else
             {
-                if (player->perkCount > 0)
+                if (player->GetGameStatsData().perkCount > 0)
                 {
                     player->AddPerk(newest_perk);
-                    player->perkCount -= 1;
+                    player->GetGameStatsData().perkCount -= 1;
                     get_perk_failed = false;
                     RE::PlaySound("UISkillsPerkSelect2D");
                 }
@@ -360,6 +401,7 @@ void ConfigReader::readAllConfig()
             if (entry.is_regular_file())
             {
                 auto filename = entry.path().filename().string();
+                std::transform(filename.begin(), filename.end(), filename.begin(), ::tolower);
                 if (filename.starts_with(config_prefix) && filename.ends_with(config_suffix))
                 {
                     logger::info("Reading {}", entry.path().string());
@@ -376,7 +418,6 @@ void ConfigReader::readAllConfig()
 void ConfigReader::draw()
 {
     static ImNodes::Ez::Context* context = ImNodes::Ez::CreateContext();
-
     if (configs.size() > 0)
     {
         if (ImGui::BeginTabBar("Skills", ImGuiTabBarFlags_None))

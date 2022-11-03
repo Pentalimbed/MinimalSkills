@@ -6,14 +6,38 @@ namespace minskill
 {
 void draw()
 {
-    auto player = RE::PlayerCharacter::GetSingleton();
-    if (!player || !player->Is3DLoaded())
+    if (ImGui::Begin("Minimalistic Custom Skill Menu"))
     {
-        ImGui::Text("Menu disabled when player character is not loaded.");
-        return;
-    }
+        auto player = RE::PlayerCharacter::GetSingleton();
+        if (!player || !player->Is3DLoaded())
+        {
+            ImGui::Text("Menu disabled when player character is not loaded.");
+            return;
+        }
 
-    ConfigReader::getSingleton()->draw();
+        ConfigReader::getSingleton()->draw();
+    }
+    ImGui::End();
+}
+
+bool integrateCatHub()
+{
+    logger::info("Looking for CatHub...");
+
+    auto result = cathub::RequestCatHubAPI();
+    if (result.index() == 0)
+    {
+        auto cathub_api = std::get<0>(result);
+        ImGui::SetCurrentContext(cathub_api->getContext());
+        cathub_api->addMenu("Minimalistic Custom Skills Menu", draw);
+        logger::info("CatHub integration succeed!");
+        return true;
+    }
+    else
+    {
+        logger::warn("CatHub integration failed! Mod disabled. Error: {}", std::get<1>(result));
+        return false;
+    }
 }
 
 void processMessage(SKSE::MessagingInterface::Message* a_msg)
@@ -22,18 +46,14 @@ void processMessage(SKSE::MessagingInterface::Message* a_msg)
     switch (a_msg->type)
     {
         case SKSE::MessagingInterface::kDataLoaded:
-            logger::debug("Data loaded");
-            cathub = cathub::RequestCatHubAPI();
-            if (!cathub)
-            {
-                logger::error("Failed to acquire CatHub API! Disabled!");
-                return;
-            }
-            ImGui::SetCurrentContext(cathub->getContext());
+            logger::info("Game: data loaded");
 
-            ConfigReader::getSingleton()->readAllConfig();
-            cathub->addMenu("Minimalistic Custom Skills Menu", draw);
-            stl::write_thunk_call<UpdateHook>();
+            if (integrateCatHub())
+            {
+                ConfigReader::getSingleton()->readAllConfig();
+
+                stl::write_thunk_call<UpdateHook>();
+            }
             break;
         default:
             break;
@@ -47,12 +67,12 @@ bool installLog()
     if (!path)
         return false;
 
-    *path /= fmt::format(FMT_STRING("{}.log"), Version::PROJECT);
+    *path /= fmt::format(FMT_STRING("{}.log"), SKSE::PluginDeclaration::GetSingleton()->GetName());
     auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
 
     auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
 
-#ifdef NDEBUG
+#ifndef DBGMSG
     log->set_level(spdlog::level::info);
     log->flush_on(spdlog::level::info);
 #else
@@ -61,66 +81,28 @@ bool installLog()
 #endif
 
     spdlog::set_default_logger(std::move(log));
-    spdlog::set_pattern("[%H:%M:%S:%e] %v"s);
+    spdlog::set_pattern("[%H:%M:%S:%e][%5l] %v"s);
 
     return true;
 }
 
-extern "C"
+SKSEPluginLoad(const SKSE::LoadInterface* skse)
 {
-    DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
-    {
-        a_info->infoVersion = SKSE::PluginInfo::kVersion;
-        a_info->name        = Version::PROJECT.data();
-        a_info->version     = Version::VERSION[0];
+    using namespace minskill;
 
-        if (a_skse->IsEditor())
-        {
-            logger::critical("Loaded in editor, marking as incompatible"sv);
-            return false;
-        }
+    installLog();
 
-        const auto ver = a_skse->RuntimeVersion();
-        if (ver < SKSE::RUNTIME_1_5_39)
-        {
-            logger::critical(FMT_STRING("Unsupported runtime version {}"), ver.string());
-            return false;
-        }
+    auto* plugin  = SKSE::PluginDeclaration::GetSingleton();
+    auto  version = plugin->GetVersion();
+    logger::info("{} {} is loading...", plugin->GetName(), version);
 
-        return true;
-    }
+    SKSE::Init(skse);
+    SKSE::AllocTrampoline(14);
 
-#ifndef BUILD_SE
-    DLLEXPORT constinit auto SKSEPlugin_Version = []() {
-        SKSE::PluginVersionData v;
+    auto messaging = SKSE::GetMessagingInterface();
+    if (!messaging->RegisterListener("SKSE", processMessage))
+        return false;
 
-        v.PluginVersion(Version::VERSION);
-        v.PluginName(Version::PROJECT);
-
-        v.UsesAddressLibrary(true);
-        v.CompatibleVersions({SKSE::RUNTIME_LATEST});
-
-        return v;
-    }();
-#endif
-
-    DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
-    {
-        installLog();
-
-        logger::info("loaded plugin");
-
-        SKSE::Init(a_skse);
-        SKSE::AllocTrampoline(14);
-
-        using namespace minskill;
-
-        auto messaging = SKSE::GetMessagingInterface();
-        if (!messaging->RegisterListener("SKSE", processMessage))
-        {
-            return false;
-        }
-
-        return true;
-    }
+    logger::info("{} has finished loading.", plugin->GetName());
+    return true;
 }
