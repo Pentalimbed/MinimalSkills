@@ -25,7 +25,7 @@ template <class T>
 void write_thunk_call()
 {
     auto&                           trampoline = SKSE::GetTrampoline();
-    REL::Relocation<std::uintptr_t> hook{REL::ID(T::id)};
-    T::func = trampoline.write_call<5>(hook.address() + T::offset, T::thunk);
+    REL::Relocation<std::uintptr_t> hook{T::id, T::offset};
+    T::func = trampoline.write_call<5>(hook.address(), T::thunk);
 }
 } // namespace stl

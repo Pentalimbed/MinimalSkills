@@ -22,12 +22,7 @@ struct UpdateHook
     }
     static inline REL::Relocation<decltype(thunk)> func;
 
-#ifdef BUILD_SE
-    static inline uint64_t id     = 35551; // 5AF3D0
-    static inline size_t   offset = 0x11F;
-#else
-    static inline uint64_t id     = 36544; // 5D29F0
-    static inline size_t   offset = 0x160;
-#endif
+    static constexpr auto id     = RELOCATION_ID(35551, 36544);
+    static constexpr auto offset = REL::VariantOffset(0x11F, 0x160, 0);
 };
 } // namespace minskill
